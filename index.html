@@ -996,6 +996,7 @@ body.light .fps-gauge, body.light .game-bar{ background:#e2e8f0; }
     <div class="qr-box">
         <h3 id="sbTitle"></h3>
         <div id="sbBody"></div>
+        <button class="qr-close" id="sbDownloadBtn" onclick="downloadBudget()" style="background:#2563eb;margin-right:8px"></button>
         <button class="qr-close" id="sbCloseBtn" onclick="closeSharedBudget()"></button>
     </div>
 </div>
@@ -1467,23 +1468,60 @@ function openQR(){
 }
 function closeQR(){ document.getElementById("qrModal").classList.remove("open"); }
 
+let sharedData=null;
 function showSharedBudget(){
     const m=location.hash.match(/^#p=(.*)$/);
     if(!m) return;
     const ids=decodeURIComponent(m[1]).split(",");
     const keys=["MOBO","CPU","RAM","GPU"];
     const labels={ MOBO:["Placa Madre","Motherboard"], CPU:["Procesador (CPU)","Processor (CPU)"], RAM:["Memoria RAM","RAM Memory"], GPU:["Tarjeta Gráfica (GPU)","Graphics Card (GPU)"] };
-    let total=FIXED_TOTAL, rows="";
+    let total=FIXED_TOTAL, rows="", list=[];
     keys.forEach((k,i)=>{
         const it=(data[k]||[]).find(x=>x.id===ids[i]);
-        if(it){ total+=it.price; rows+=`<div class="sb-row"><div><strong>${T(labels[k][0],labels[k][1])}</strong><small>${it.name}</small></div><strong>${money(it.price)}</strong></div>`; }
-        else{ rows+=`<div class="sb-row"><div><strong>${T(labels[k][0],labels[k][1])}</strong><small>${T("No seleccionado","Not selected")}</small></div><strong>${money(0)}</strong></div>`; }
+        const label=T(labels[k][0],labels[k][1]), name=it?it.name:T("No seleccionado","Not selected"), price=it?it.price:0;
+        total+=price; list.push([label,name,money(price)]);
+        rows+=`<div class="sb-row"><div><strong>${label}</strong><small>${name}</small></div><strong>${money(price)}</strong></div>`;
     });
-    FIXED_PARTS.forEach(f=>{ rows+=`<div class="sb-row"><div><strong>${T("Incluido","Included")}</strong><small>${lang==="en"?f.en:f.es}</small></div><strong>${money(f.price)}</strong></div>`; });
-    document.getElementById("sbTitle").textContent=T("🖥️ Presupuesto de PC a medida","🖥️ Custom PC budget");
+    FIXED_PARTS.forEach(f=>{
+        const name=lang==="en"?f.en:f.es;
+        list.push([T("Incluido","Included"),name,money(f.price)]);
+        rows+=`<div class="sb-row"><div><strong>${T("Incluido","Included")}</strong><small>${name}</small></div><strong>${money(f.price)}</strong></div>`;
+    });
+    sharedData={ title:T("Presupuesto de PC a medida","Custom PC budget"), list, total:money(total) };
+    document.getElementById("sbTitle").textContent="🖥️ "+sharedData.title;
     document.getElementById("sbBody").innerHTML=rows+`<div class="sb-total"><span>TOTAL</span><span>${money(total)}</span></div>`;
+    document.getElementById("sbDownloadBtn").textContent=T("⬇️ Descargar mi presupuesto","⬇️ Download my budget");
     document.getElementById("sbCloseBtn").textContent=T("Cerrar","Close");
     document.getElementById("sharedBudget").classList.add("open");
+}
+function downloadBudget(){
+    if(!sharedData) return;
+    const W=800, rowH=76, H=170+sharedData.list.length*rowH+110;
+    const c=document.createElement("canvas"); c.width=W; c.height=H;
+    const x=c.getContext("2d");
+    x.fillStyle="#ffffff"; x.fillRect(0,0,W,H);
+    x.fillStyle="#0f172a"; x.fillRect(0,0,W,110);
+    x.fillStyle="#ffffff"; x.font="bold 34px Arial, sans-serif"; x.textBaseline="middle"; x.textAlign="left";
+    x.fillText(sharedData.title,40,55);
+    const fit=(t,max)=>{ while(t.length>3 && x.measureText(t).width>max) t=t.slice(0,-2); return t; };
+    let y=150;
+    sharedData.list.forEach(r=>{
+        x.fillStyle="#475569"; x.font="bold 20px Arial, sans-serif"; x.textAlign="left"; x.fillText(r[0],40,y+14);
+        x.fillStyle="#0f172a"; x.font="24px Arial, sans-serif";
+        let n=r[1]; if(x.measureText(n).width>520){ n=fit(n,500)+"…"; }
+        x.fillText(n,40,y+46);
+        x.textAlign="right"; x.font="bold 24px Arial, sans-serif"; x.fillText(r[2],W-40,y+30);
+        x.strokeStyle="#e2e8f0"; x.beginPath(); x.moveTo(40,y+rowH-8); x.lineTo(W-40,y+rowH-8); x.stroke();
+        y+=rowH;
+    });
+    x.fillStyle="#1d4ed8"; x.font="bold 34px Arial, sans-serif"; x.textAlign="left"; x.fillText("TOTAL",40,y+50);
+    x.textAlign="right"; x.fillText(sharedData.total,W-40,y+50);
+    c.toBlob(blob=>{
+        const a=document.createElement("a");
+        a.href=URL.createObjectURL(blob); a.download="presupuesto-pc.png";
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    },"image/png");
 }
 function closeSharedBudget(){ document.getElementById("sharedBudget").classList.remove("open"); }
 
